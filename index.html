@@ -491,6 +491,12 @@ table.fg-table th .fg-qbadge { margin-top: 6px; }
   ];
 
   let selected = [];
+  const liveCompanies = {}; // API로 실시간 조회된 회사들 (id -> normalized company object)
+  let liveLoading = null; // 현재 조회 중인 검색어(없으면 null)
+
+  function escapeHtml(str){
+    return String(str).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
 
   function fmtYoy(yoy){
     if (yoy === 'turnaround') return { text:'흑자전환', cls:'up' };
@@ -515,7 +521,7 @@ table.fg-table th .fg-qbadge { margin-top: 6px; }
     { label:'ROE', hint:'높을수록 유리 (부채효과 주의)', unit:'%', get:(c) => parseNum(c.financials.roe.v) },
     { label:'부채비율', hint:'낮을수록 유리', unit:'%', get:(c) => parseNum(c.financials.debtRatio.v) },
     { label:'PER', hint:'낮을수록 저평가 (이익의 질도 확인)', unit:'배', get:(c) => parseNum(c.financials.per.v) },
-    { label:'FCF 마진 (FCF/매출)', hint:'높을수록 유리', unit:'%', get:(c) => c.cashflow.fcfMarginPct },
+    { label:'FCF 마진 (FCF/매출)', hint:'높을수록 유리', unit:'%', get:(c) => (c.cashflow ? c.cashflow.fcfMarginPct : null) },
   ];
 
   function renderCharts(){
@@ -650,24 +656,96 @@ table.fg-table th .fg-qbadge { margin-top: 6px; }
     el.innerHTML = DATA.map(c => `<span>${c.ticker} · ${c.name}</span>`).join('');
   }
 
-  function renderGrid(filter){
-    const el = document.getElementById('fgGrid');
-    const f = (filter || '').trim().toLowerCase();
-    const list = DATA.filter(c => !f ||
-      c.name.toLowerCase().includes(f) ||
-      c.ticker.toLowerCase().includes(f) ||
-      c.id.toLowerCase().includes(f));
-    el.innerHTML = list.map(c => `
+  function companyCardHtml(c){
+    return `
       <div class="fg-card ${selected.includes(c.id) ? 'sel':''}" data-id="${c.id}">
-        <div class="fg-name">${c.name}</div>
+        <div class="fg-name">${c.name}${c.isLive ? ' <span class="fg-badge" style="background:#171B24;color:#fff;">LIVE</span>' : ''}</div>
         <div class="fg-ticker">${c.ticker}</div>
         <div class="fg-sector">${c.sector}</div>
         <span class="fg-badge ${c.market.toLowerCase()}">${c.market}</span>
         <span class="fg-qbadge ${c.earningsQuality.flag}">이익의 질 ${qLabel(c.earningsQuality.flag)}</span>
-      </div>`).join('') || '<div class="fg-empty">검색 결과가 없습니다.</div>';
+      </div>`;
+  }
+
+  function renderGrid(filter){
+    const el = document.getElementById('fgGrid');
+    const f = (filter || '').trim().toLowerCase();
+    const matches = (c) => !f ||
+      c.name.toLowerCase().includes(f) ||
+      c.ticker.toLowerCase().includes(f) ||
+      c.id.toLowerCase().includes(f);
+    const staticList = DATA.filter(matches);
+    const liveList = Object.values(liveCompanies).filter(matches);
+    let html = staticList.map(companyCardHtml).join('') + liveList.map(companyCardHtml).join('');
+
+    const hasAnyMatch = staticList.length > 0 || liveList.length > 0;
+    if (f.length >= 2 && !hasAnyMatch) {
+      if (liveLoading === f) {
+        html += `<div class="fg-card">
+          <div class="fg-name">⏳ 조회 중...</div>
+          <div class="fg-sector">'${escapeHtml(filter.trim())}' 검색 중 (국내는 최대 30초 정도 걸릴 수 있어요)</div>
+        </div>`;
+      } else {
+        html += `<div class="fg-card" data-live-query="${escapeHtml(f)}" style="cursor:pointer;">
+          <div class="fg-name">🔍 온라인에서 검색</div>
+          <div class="fg-sector">'${escapeHtml(filter.trim())}' 실시간으로 찾아보기 (국내·해외 모두 지원)</div>
+        </div>`;
+      }
+    }
+
+    el.innerHTML = html || '<div class="fg-empty">검색 결과가 없습니다.</div>';
     el.querySelectorAll('.fg-card').forEach(card => {
-      card.addEventListener('click', () => toggleSelect(card.getAttribute('data-id')));
+      const id = card.getAttribute('data-id');
+      const liveQuery = card.getAttribute('data-live-query');
+      if (id) {
+        card.addEventListener('click', () => toggleSelect(id));
+      } else if (liveQuery) {
+        card.addEventListener('click', () => fetchLiveCompany(filter.trim()));
+      }
     });
+  }
+
+  function normalizeLiveCompany(data){
+    return {
+      ...data,
+      segments: data.segments || [],
+      cashflow: data.cashflow || null,
+      earningsQuality: data.earningsQuality || { flag:'caution', note:'자동 조회된 데이터라 이익의 질 분석은 아직 제공되지 않습니다.' },
+      analyst: data.analyst || null,
+      sectorGrowth: data.sectorGrowth || null,
+      industry: data.industry || null,
+      news: data.news || [],
+      isLive: true,
+    };
+  }
+
+  async function fetchLiveCompany(query){
+    if (!query || liveLoading) return;
+    liveLoading = query.toLowerCase();
+    renderGrid(document.getElementById('fgSearch').value);
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || `'${query}'를 찾지 못했어요.`);
+        return;
+      }
+      const normalized = normalizeLiveCompany(data);
+      liveCompanies[normalized.id] = normalized;
+      document.getElementById('fgSearch').value = ''; // 검색어를 지워서 새로 찾은 회사가 목록에 바로 보이게 함
+      if (!selected.includes(normalized.id)) {
+        if (selected.length >= 3) {
+          alert(`'${normalized.name}'를 찾았어요! 다만 이미 3개가 선택되어 있어서, 기존 선택 하나를 해제한 뒤 검색 결과 카드를 다시 눌러 추가해주세요.`);
+        } else {
+          selected.push(normalized.id);
+        }
+      }
+    } catch (e) {
+      alert('검색 중 오류가 발생했어요. 배포가 아직 안 됐거나 네트워크 문제일 수 있어요.');
+    } finally {
+      liveLoading = null;
+      renderAll();
+    }
   }
 
   function toggleSelect(id){
@@ -684,7 +762,7 @@ table.fg-table th .fg-qbadge { margin-top: 6px; }
   }
 
   function getSelectedCompanies(){
-    return selected.map(id => DATA.find(c => c.id === id));
+    return selected.map(id => DATA.find(c => c.id === id) || liveCompanies[id]).filter(Boolean);
   }
 
   function renderChips(){
@@ -739,12 +817,17 @@ table.fg-table th .fg-qbadge { margin-top: 6px; }
     if (!comps.length) { wrap.style.display = 'none'; return; }
     wrap.style.display = 'block';
     cols.style.setProperty('--cols', comps.length);
-    cols.innerHTML = comps.map(c => `
+    cols.innerHTML = comps.map(c => {
+      if (!c.segments || !c.segments.length) {
+        return `<div class="fg-seg-card"><h3>${c.name}</h3><p class="fg-cf-desc" style="margin:0;">사업부문 비중 데이터가 아직 없어요 (실시간 조회 종목).</p></div>`;
+      }
+      return `
       <div class="fg-seg-card">
         <h3>${c.name}</h3>
         <div class="fg-seg-bar">${c.segments.map((s,i) => `<span style="width:${s.pct}%;background:${SEG_COLORS[i % SEG_COLORS.length]}"></span>`).join('')}</div>
         <div class="fg-seg-legend">${c.segments.map((s,i) => `<span><i style="background:${SEG_COLORS[i % SEG_COLORS.length]}"></i>${s.name} ${s.pct}%</span>`).join('')}</div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   }
 
   function ratingFlag(rating){
@@ -801,6 +884,9 @@ table.fg-table th .fg-qbadge { margin-top: 6px; }
 
     cols.innerHTML = comps.map((c, idx) => {
       const q = QUARTERLY.companies[c.id];
+      if (!q) {
+        return `<div class="fg-qtr-card"><h3>${c.name}</h3><p class="fg-cf-desc" style="margin:0;">분기별 실적 데이터가 아직 없어요 (실시간 조회 종목).</p></div>`;
+      }
       const labels = QUARTERLY.labels;
       const revLast = q.revenue[q.revenue.length - 1], revPrev = q.revenue[q.revenue.length - 2];
       const opLast = q.opProfit[q.opProfit.length - 1], opPrev = q.opProfit[q.opProfit.length - 2];
@@ -907,9 +993,23 @@ table.fg-table th .fg-qbadge { margin-top: 6px; }
     const container = document.getElementById('fgPriceChart');
     const statsEl = document.getElementById('fgPriceStats');
     const legendEl = document.getElementById('fgPriceLegend');
-    const comps = getSelectedCompanies();
-    if (!comps.length) { wrap.style.display = 'none'; return; }
+    const allComps = getSelectedCompanies();
+    if (!allComps.length) { wrap.style.display = 'none'; return; }
     wrap.style.display = 'block';
+
+    const comps = allComps.filter(c => PRICE_HISTORY[c.id]);
+    const missing = allComps.filter(c => !PRICE_HISTORY[c.id]);
+    const missingNote = missing.length
+      ? `<p class="fg-cf-desc" style="margin-top:10px;">${missing.map(c => c.name).join(', ')}은(는) 주가 데이터가 아직 연결되지 않아 차트에서 빠졌어요 (실시간 조회 종목).</p>`
+      : '';
+
+    if (!comps.length) {
+      container.innerHTML = '';
+      statsEl.innerHTML = '';
+      legendEl.innerHTML = missingNote;
+      return;
+    }
+
     container.innerHTML = buildPriceChartSvg(comps);
 
     if (comps.length === 1) {
@@ -922,7 +1022,7 @@ table.fg-table th .fg-qbadge { margin-top: 6px; }
         <div>3개월 최고<b>${fmtPrice(Math.max(...series), c.market)}</b></div>
         <div>3개월 최저<b>${fmtPrice(Math.min(...series), c.market)}</b></div>
         <div>3개월 수익률<b><span class="fg-yoy ${retCls}" style="margin-left:0;">${ret >= 0 ? '+' : ''}${ret.toFixed(1)}%</span></b></div>`;
-      legendEl.innerHTML = '';
+      legendEl.innerHTML = missingNote;
     } else {
       statsEl.innerHTML = '';
       legendEl.innerHTML = comps
@@ -932,7 +1032,7 @@ table.fg-table th .fg-qbadge { margin-top: 6px; }
           const cls = ret >= 0 ? 'up' : 'down';
           return `<span><i style="background:${COMPANY_COLORS[i]}"></i>${c.name} <span class="fg-yoy ${cls}" style="margin-left:4px;">${ret >= 0 ? '+' : ''}${ret.toFixed(1)}%</span></span>`;
         })
-        .join('');
+        .join('') + missingNote;
     }
   }
 
@@ -945,6 +1045,9 @@ table.fg-table th .fg-qbadge { margin-top: 6px; }
     cols.style.setProperty('--cols', comps.length);
     cols.innerHTML = comps.map(c => {
       const a = c.analyst;
+      if (!a) {
+        return `<div class="fg-cf-card"><h3>${c.name}</h3><p class="fg-cf-desc" style="margin:0;">애널리스트 투자의견 데이터가 아직 연결되지 않았어요 (실시간 조회 종목).</p></div>`;
+      }
       const up = a.upsidePct >= 0;
       return `
       <div class="fg-cf-card">
@@ -968,6 +1071,9 @@ table.fg-table th .fg-qbadge { margin-top: 6px; }
     wrap.style.display = 'block';
     cols.style.setProperty('--cols', comps.length);
     cols.innerHTML = comps.map(c => {
+      if (!c.cashflow) {
+        return `<div class="fg-cf-card"><h3>${c.name} <span class="fg-qbadge ${c.earningsQuality.flag}">이익의 질 ${qLabel(c.earningsQuality.flag)}</span></h3><p class="fg-cf-desc" style="margin:0 0 10px;">현금흐름 데이터는 아직 지원되지 않아요 (실시간 조회 종목).</p><div class="fg-cf-note ${c.earningsQuality.flag}">${c.earningsQuality.note}</div></div>`;
+      }
       const fcfYoy = c.cashflow.fcfYoy;
       const yoyHtml = fcfYoy === undefined ? '' : (() => {
         const y = fmtYoy(fcfYoy);
@@ -995,17 +1101,22 @@ table.fg-table th .fg-qbadge { margin-top: 6px; }
     if (!comps.length) { wrap.style.display = 'none'; return; }
     wrap.style.display = 'block';
     cols.style.setProperty('--cols', comps.length);
-    cols.innerHTML = comps.map(c => `
+    cols.innerHTML = comps.map(c => {
+      if (!c.industry) {
+        return `<div class="fg-ind-card"><h3>${c.name} <span style="font-weight:400;color:var(--ink-soft);font-size:12px;">· ${c.sector}</span></h3><div class="fg-row"><div class="fg-v">산업 동향·경쟁 구도 데이터가 아직 없어요 (실시간 조회 종목).</div></div></div>`;
+      }
+      const growthBadge = c.sectorGrowth
+        ? `<div class="fg-growth-row"><span class="fg-qbadge ${c.sectorGrowth.flag}">${c.sectorGrowth.stage}</span><span class="fg-growth-cagr">시장 성장률(CAGR) ${c.sectorGrowth.cagr}</span></div>`
+        : '';
+      return `
       <div class="fg-ind-card">
         <h3>${c.name} <span style="font-weight:400;color:var(--ink-soft);font-size:12px;">· ${c.sector}</span></h3>
-        <div class="fg-growth-row">
-          <span class="fg-qbadge ${c.sectorGrowth.flag}">${c.sectorGrowth.stage}</span>
-          <span class="fg-growth-cagr">시장 성장률(CAGR) ${c.sectorGrowth.cagr}</span>
-        </div>
+        ${growthBadge}
         <div class="fg-row"><div class="fg-k">산업 동향</div><div class="fg-v">${c.industry.trend}</div></div>
         <div class="fg-row"><div class="fg-k">경쟁사 대비 포지셔닝</div><div class="fg-v">${c.industry.competitors}</div></div>
         <div class="fg-row"><div class="fg-k">향후 1~2년 성장 동력</div><div class="fg-v">${c.industry.growth}</div></div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   }
 
   function renderNews(){
@@ -1019,12 +1130,12 @@ table.fg-table th .fg-qbadge { margin-top: 6px; }
     cols.innerHTML = comps.map(c => `
       <div class="fg-news-card">
         <h3>${c.name}</h3>
-        ${c.news.map(n => `
+        ${c.news.length ? c.news.map(n => `
           <div class="fg-news-item">
             <span class="fg-news-date">${n.date}</span>
             <span class="fg-news-tag ${n.tag}">${tagLabel[n.tag]}</span>
             <span>${n.title}</span>
-          </div>`).join('')}
+          </div>`).join('') : '<p class="fg-cf-desc" style="margin:0;">최근 뉴스 요약이 아직 없어요 (실시간 조회 종목).</p>'}
       </div>`).join('');
   }
 
