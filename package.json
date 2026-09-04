@@ -1,0 +1,21 @@
+{
+  "name": "finance-glance-backend",
+  "version": "1.0.0",
+  "description": "재무 한눈에 - 뉴스 요약 및 섹터 열기 자동화 백엔드",
+  "type": "module",
+  "scripts": {
+    "news": "node scripts/news-summarize.mjs",
+    "theme": "node scripts/theme-heat.mjs",
+    "calendar": "node scripts/market-calendar.mjs",
+    "corp-codes": "node scripts/fetch-corp-codes.mjs",
+    "all": "npm run news && npm run theme && npm run calendar"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.0",
+    "adm-zip": "^0.5.10",
+    "fast-xml-parser": "^4.4.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
