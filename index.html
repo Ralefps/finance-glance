@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>재무 한눈에</title>
+<meta name="description" content="회사명이나 종목코드로 검색해 재무제표를 비교하는 투자 초보자용 프로토타입">
+<meta name="theme-color" content="#00C896">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="재무한눈에">
+</head>
+<body>
+<style>
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
+
+.fg-root {
+  --bg: #F1F3F6;
+  --surface: #FFFFFF;
+  --surface-alt: #F7F8FA;
+  --ink: #171B24;
+  --ink-soft: #6B7684;
+  --ink-faint: #9AA3B2;
+  --line: #EAECEF;
+
+  --brand: #00C896;
+  --brand-ink: #00875A;
+  --brand-soft: #E1F9F1;
+
+  --up: #F0384A;
+  --up-soft: #FDE8EA;
+  --down: #3366FF;
+  --down-soft: #E9EFFF;
+  --caution: #FFAB00;
+  --caution-soft: #FFF4DC;
+  --warning: #F0384A;
+  --warning-soft: #FDE8EA;
+
+  --kr-bg: #EFEBFF; --kr-fg: #6B4EE6;
+  --us-bg: #E9F1F7; --us-fg: #3D6A8C;
+
+  --radius-lg: 22px;
+  --radius-md: 14px;
+  --radius-sm: 9px;
+  --shadow-card: 0 1px 2px rgba(23,27,36,0.04), 0 10px 24px -12px rgba(23,27,36,0.12);
+
+  font-family: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-feature-settings: 'tnum' 1;
+  color: var(--ink);
+  background: var(--bg);
+  padding: 32px 18px 70px;
+  max-width: 1080px;
+  margin: 0 auto;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+.fg-root * { box-sizing: border-box; }
+
+.fg-mast { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; margin-bottom: 20px; }
+.fg-mast .fg-brandrow { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.fg-mast .fg-logo { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg, var(--brand), #7C5CFC); flex-shrink: 0; }
+.fg-mast h1 { font-size: 26px; font-weight: 800; margin: 0; letter-spacing: -0.02em; }
+.fg-mast p { margin: 0; color: var(--ink-soft); font-size: 14px; max-width: 460px; }
+.fg-mast .fg-tag { font-size: 11.5px; font-weight: 700; color: var(--brand-ink); background: var(--brand-soft); padding: 6px 12px; border-radius: 999px; white-space: nowrap; }
+
+.fg-tape { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 22px; overflow-x: auto; padding-bottom: 2px; }
+.fg-tape span { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 6px 13px; color: var(--ink-soft); background: var(--surface); box-shadow: var(--shadow-card); white-space: nowrap; }
+
+.fg-panel { background: var(--surface); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 18px; box-shadow: var(--shadow-card); }
+.fg-panel h2 { font-size: 18px; font-weight: 800; margin: 0 0 4px; letter-spacing: -0.01em; }
+.fg-panel .fg-sub { color: var(--ink-soft); font-size: 13px; margin: 0 0 16px; }
+
+.fg-search { width: 100%; padding: 14px 18px; border: none; border-radius: 999px; font-size: 14.5px; font-family: inherit; margin-bottom: 16px; background: var(--surface-alt); color: var(--ink); }
+.fg-search::placeholder { color: var(--ink-faint); }
+.fg-search:focus { outline: none; box-shadow: 0 0 0 3px var(--brand-soft); background: var(--surface); }
+
+.fg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 10px; }
+.fg-card { border-radius: var(--radius-md); padding: 14px; cursor: pointer; background: var(--surface-alt); border: 2px solid transparent; transition: transform .12s ease, border-color .12s ease, background .12s ease; }
+.fg-card:hover { transform: translateY(-2px); }
+.fg-card.sel { border-color: var(--brand); background: var(--brand-soft); }
+.fg-card .fg-name { font-weight: 700; font-size: 14.5px; }
+.fg-card .fg-ticker { font-size: 11.5px; color: var(--ink-soft); margin-top: 2px; font-weight: 500; }
+.fg-card .fg-sector { font-size: 11.5px; color: var(--ink-faint); margin-top: 8px; }
+.fg-badge { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; margin-top: 9px; }
+.fg-badge.kr { background: var(--kr-bg); color: var(--kr-fg); }
+.fg-badge.us { background: var(--us-bg); color: var(--us-fg); }
+
+.fg-note { font-size: 12.5px; color: var(--ink-faint); margin-top: 14px; }
+.fg-note b { color: var(--ink-soft); }
+
+.fg-empty { text-align: center; padding: 44px 10px; color: var(--ink-faint); font-size: 14px; }
+
+.fg-scroll { overflow-x: auto; }
+table.fg-table { width: 100%; border-collapse: collapse; min-width: 480px; }
+table.fg-table th, table.fg-table td { padding: 13px 14px; text-align: left; vertical-align: top; border: none; }
+table.fg-table th { font-size: 12px; color: var(--ink-soft); font-weight: 600; }
+table.fg-table th.fg-colhead { text-align: right; }
+table.fg-table tbody tr:not(.fg-grouprow):hover { background: var(--surface-alt); }
+table.fg-table tbody tr:not(.fg-grouprow) td:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+table.fg-table tbody tr:not(.fg-grouprow) td:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+table.fg-table .fg-grouprow td { padding-top: 20px; padding-bottom: 8px; }
+table.fg-table .fg-grouprow td::before { content: attr(data-label); display: inline-block; font-size: 11.5px; font-weight: 800; letter-spacing: 0.01em; color: var(--brand-ink); background: var(--brand-soft); padding: 4px 11px; border-radius: 999px; }
+table.fg-table td.fg-metric { width: 30%; }
+table.fg-table td.fg-metric .fg-mname { font-weight: 700; font-size: 13.5px; }
+table.fg-table td.fg-metric .fg-mdesc { font-size: 11.5px; color: var(--ink-faint); margin-top: 3px; }
+table.fg-table td.fg-val { text-align: right; }
+table.fg-table td.fg-val .fg-num { font-size: 15px; font-weight: 700; }
+table.fg-table td.fg-val .fg-yoy { display: inline-block; font-size: 11px; font-weight: 700; margin-left: 7px; padding: 2px 8px; border-radius: 999px; }
+table.fg-table td.fg-val .fg-yoy.up { color: var(--up); background: var(--up-soft); }
+table.fg-table td.fg-val .fg-yoy.down { color: var(--down); background: var(--down-soft); }
+table.fg-table td.fg-val .fg-yoy.gold { color: var(--caution); background: var(--caution-soft); }
+
+.fg-chiprow { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+.fg-chip { font-size: 12.5px; font-weight: 700; padding: 7px 8px 7px 14px; border-radius: 999px; display: flex; align-items: center; gap: 8px; background: var(--surface-alt); color: var(--ink); }
+.fg-chip button { border: none; background: var(--line); width: 18px; height: 18px; border-radius: 50%; cursor: pointer; font-size: 11px; color: var(--ink-soft); line-height: 1; padding: 0; }
+.fg-reset { font-size: 12px; font-weight: 600; color: var(--ink-soft); background: none; border: none; padding: 7px 12px; border-radius: 999px; cursor: pointer; }
+.fg-reset:hover { background: var(--surface-alt); }
+
+.fg-qbadge { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+.fg-qbadge.good { background: var(--brand-soft); color: var(--brand-ink); }
+.fg-qbadge.caution { background: var(--caution-soft); color: #A66A00; }
+.fg-qbadge.warning { background: var(--warning-soft); color: var(--warning); }
+.fg-card .fg-qbadge { margin-top: 6px; margin-left: 5px; }
+table.fg-table th .fg-qbadge { margin-top: 6px; }
+
+.fg-cf-cols { display: grid; gap: 16px; }
+.fg-cf-card { border-radius: var(--radius-md); padding: 18px; background: var(--surface-alt); }
+.fg-cf-card h3 { font-size: 14.5px; font-weight: 700; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fg-cf-nums { display: flex; gap: 16px; flex-wrap: wrap; margin: 12px 0 14px; }
+.fg-cf-nums div { font-size: 11.5px; color: var(--ink-soft); font-weight: 500; }
+.fg-cf-nums div b { display: block; font-size: 16px; color: var(--ink); font-weight: 700; margin-top: 3px; }
+.fg-cf-tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 4px 11px; border-radius: 999px; background: var(--us-bg); color: var(--us-fg); margin-bottom: 10px; }
+.fg-cf-desc { font-size: 12.5px; color: var(--ink-soft); margin-bottom: 12px; }
+.fg-cf-note { font-size: 12.5px; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--surface); border-left: 3px solid var(--line); }
+.fg-cf-note.good { border-color: var(--brand); }
+.fg-cf-note.caution { border-color: var(--caution); }
+.fg-cf-note.warning { border-color: var(--warning); }
+
+.fg-growth-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.fg-growth-cagr { font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+
+.fg-cal-list { display: flex; flex-direction: column; gap: 10px; }
+.fg-cal-item { display: flex; gap: 16px; border-radius: var(--radius-md); padding: 16px; background: var(--surface-alt); align-items: flex-start; }
+.fg-cal-date { width: 56px; flex-shrink: 0; text-align: center; }
+.fg-cal-date .fg-cal-d { font-size: 20px; font-weight: 800; line-height: 1; }
+.fg-cal-date .fg-cal-m { font-size: 11px; color: var(--ink-faint); font-weight: 700; margin-top: 3px; }
+.fg-cal-body { flex: 1; min-width: 0; }
+.fg-cal-title-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+.fg-cal-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.fg-cal-dot.high { background: var(--up); }
+.fg-cal-dot.medium { background: var(--caution); }
+.fg-cal-title { font-weight: 700; font-size: 14.5px; }
+.fg-cal-type { font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: var(--us-bg); color: var(--us-fg); }
+.fg-cal-stats { display: flex; gap: 20px; margin-top: 10px; flex-wrap: wrap; }
+.fg-cal-stats div { font-size: 11.5px; color: var(--ink-soft); font-weight: 500; }
+.fg-cal-stats div b { display: block; font-size: 13.5px; color: var(--ink); font-weight: 700; margin-top: 3px; }
+.fg-cal-why { font-size: 12.5px; color: var(--ink-soft); margin-top: 10px; }
+
+.fg-radar-list { display: flex; flex-direction: column; gap: 10px; }
+.fg-radar-item { display: flex; align-items: flex-start; gap: 16px; border-radius: var(--radius-md); padding: 16px; background: var(--surface-alt); }
+.fg-radar-heat { display: flex; gap: 4px; margin-top: 5px; flex-shrink: 0; width: 54px; }
+.fg-radar-heat span { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.fg-radar-heat span.on { background: var(--brand); }
+.fg-radar-body { flex: 1; min-width: 0; }
+.fg-radar-name { font-weight: 700; font-size: 14.5px; margin-bottom: 4px; }
+.fg-radar-desc { font-size: 12.5px; color: var(--ink-soft); margin-bottom: 8px; }
+.fg-radar-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.fg-radar-chip { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--surface); color: var(--ink-soft); }
+
+.fg-chart-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+.fg-chart-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.fg-chart-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.fg-chart-metric { border-radius: var(--radius-md); padding: 16px; background: var(--surface-alt); }
+.fg-chart-title { font-size: 13px; font-weight: 700; margin-bottom: 14px; }
+.fg-chart-hint { font-weight: 500; color: var(--ink-faint); font-size: 11px; margin-left: 6px; }
+.fg-chart-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.fg-chart-row:last-child { margin-bottom: 0; }
+.fg-chart-name { width: 88px; font-size: 12px; font-weight: 600; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fg-chart-track { flex: 1; background: var(--surface); border-radius: 999px; height: 12px; overflow: hidden; }
+.fg-chart-fill { height: 100%; border-radius: 999px; }
+.fg-chart-value { width: 58px; text-align: right; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+
+.fg-seg-cols { display: grid; gap: 16px; }
+.fg-seg-card { border-radius: var(--radius-md); padding: 16px; background: var(--surface-alt); }
+.fg-seg-card h3 { font-size: 14.5px; font-weight: 700; margin: 0 0 10px; display: flex; align-items: center; gap: 6px; }
+.fg-seg-bar { display: flex; height: 22px; border-radius: 999px; overflow: hidden; margin-bottom: 10px; }
+.fg-seg-bar span { display: block; height: 100%; }
+.fg-seg-legend { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+.fg-seg-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+
+.fg-ind-cols, .fg-news-cols { display: grid; gap: 16px; }
+.fg-ind-card, .fg-news-card { border-radius: var(--radius-md); padding: 18px; background: var(--surface-alt); }
+.fg-ind-card h3, .fg-news-card h3 { font-size: 14.5px; font-weight: 700; margin: 0 0 12px; }
+.fg-ind-card .fg-row { margin-bottom: 12px; }
+.fg-ind-card .fg-row:last-child { margin-bottom: 0; }
+.fg-ind-card .fg-row .fg-k { font-size: 11px; font-weight: 700; color: var(--ink-faint); margin-bottom: 4px; }
+.fg-ind-card .fg-row .fg-v { font-size: 13px; color: var(--ink); }
+
+.fg-news-item { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.fg-news-item:last-child { border-bottom: none; padding-bottom: 0; }
+.fg-news-date { font-size: 11px; font-weight: 600; color: var(--ink-faint); white-space: nowrap; padding-top: 3px; }
+.fg-news-tag { font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 999px; height: fit-content; white-space: nowrap; margin-top: 1px; }
+.fg-news-tag.strategy { background: var(--us-bg); color: var(--us-fg); }
+.fg-news-tag.invest { background: var(--caution-soft); color: #A66A00; }
+.fg-news-tag.risk { background: var(--warning-soft); color: var(--warning); }
+
+.fg-footer { font-size: 11.5px; color: var(--ink-faint); padding: 18px 4px 4px; margin-top: 8px; line-height: 1.7; }
+
+@media (min-width: 640px) {
+  .fg-seg-cols, .fg-ind-cols, .fg-news-cols, .fg-cf-cols { grid-template-columns: repeat(var(--cols, 1), 1fr); }
+}
+</style>
+
+<div class="fg-root">
+  <div class="fg-mast">
+    <div>
+      <div class="fg-brandrow">
+        <div class="fg-logo"></div>
+        <h1>재무 한눈에</h1>
+      </div>
+      <p>회사명이나 종목코드를 검색해 최대 3개 종목의 재무제표를 나란히 비교해보세요. 투자 초보자도 이해할 수 있게 쉬운 설명을 함께 붙였습니다.</p>
+    </div>
+    <div class="fg-tag">PROTOTYPE · 샘플 데이터 · 2026.09 기준(가상)</div>
+  </div>
+
+  <div class="fg-tape" id="fgTape"></div>
+
+  <div class="fg-panel">
+    <h2>종목 검색</h2>
+    <p class="fg-sub">한국/미국 주식 모두 지원합니다 (현재 프로토타입은 샘플 6종목).</p>
+    <input class="fg-search" id="fgSearch" placeholder="예: 삼성전자, 005930, apple, NVDA ..." />
+    <div class="fg-grid" id="fgGrid"></div>
+    <p class="fg-note">최대 <b>3개</b> 종목까지 동시에 비교할 수 있어요. 카드를 다시 누르면 선택이 해제됩니다.</p>
+  </div>
+
+  <div class="fg-panel">
+    <h2>지금 주목받는 섹터 레이더</h2>
+    <p class="fg-sub">아직 특정 종목보다 산업 전체가 먼저 부각되는 초기 단계 테마들입니다. 종목 리서치를 시작하기 전 '요즘 뭐가 뜨는지' 훑어보는 용도로 참고하세요. 열기(●)가 높을수록 최근 뉴스·투자 관심이 뜨겁다는 뜻입니다.</p>
+    <div class="fg-radar-list" id="fgRadarList"></div>
+  </div>
+
+  <div class="fg-panel">
+    <h2>미국 증시 주요 일정 &amp; 기준치</h2>
+    <p class="fg-sub">FOMC(금리 결정), 주요 경제지표, 핵심 종목 실적 발표일을 모아뒀어요. '기준치'는 시장이 예상하는 컨센서스, '이전치'는 직전 발표값입니다 — 실제 발표가 기준치보다 좋은지 나쁜지가 주가에 더 큰 영향을 줘요.</p>
+    <div class="fg-cal-list" id="fgCalList"></div>
+  </div>
+
+  <div class="fg-panel" id="fgCompareWrap">
+    <h2>재무지표 비교</h2>
+    <p class="fg-sub">전년 동기 대비(YoY) 증감을 함께 표시했습니다.</p>
+    <div id="fgChips"></div>
+    <div id="fgCompareBody"></div>
+  </div>
+
+  <div class="fg-panel" id="fgChartWrap" style="display:none;">
+    <h2>핵심 지표 한눈에 비교</h2>
+    <p class="fg-sub">투자 판단에서 자주 보는 지표만 골라 그래프로 비교했어요. 지표마다 유리한 방향(높을수록/낮을수록)이 다르니 함께 확인하세요.</p>
+    <div class="fg-chart-legend" id="fgChartLegend"></div>
+    <div class="fg-chart-grid" id="fgChartGrid"></div>
+  </div>
+
+  <div class="fg-panel" id="fgAnWrap" style="display:none;">
+    <h2>애널리스트 투자의견</h2>
+    <p class="fg-sub">증권사 애널리스트들의 평균 의견(컨센서스)입니다. 특정 종목에 대한 매수/매도 권유가 아니라 시장 참고자료로만 활용하세요.</p>
+    <div class="fg-cf-cols" id="fgAnCols"></div>
+  </div>
+
+  <div class="fg-panel" id="fgSegWrap" style="display:none;">
+    <h2>사업부문별 매출 비중</h2>
+    <p class="fg-sub">어디서 돈을 버는 회사인지 구조를 보여줍니다.</p>
+    <div class="fg-seg-cols" id="fgSegCols"></div>
+  </div>
+
+  <div class="fg-panel" id="fgCfWrap" style="display:none;">
+    <h2>현금흐름 &amp; 이익의 질</h2>
+    <p class="fg-sub">회계상 이익이 실제 '돈이 들어오는 사업'에서 나온 건지, 잉여현금은 어디에 쓰이는지를 보여줍니다. PER·PBR이 좋아 보여도 이 부분을 함께 확인하는 게 중요해요.</p>
+    <div class="fg-cf-cols" id="fgCfCols"></div>
+  </div>
+
+  <div class="fg-panel" id="fgIndWrap" style="display:none;">
+    <h2>산업 동향 &amp; 경쟁 구도</h2>
+    <div class="fg-ind-cols" id="fgIndCols"></div>
+  </div>
+
+  <div class="fg-panel" id="fgNewsWrap" style="display:none;">
+    <h2>최근 3개월 주요 뉴스 요약</h2>
+    <div class="fg-news-cols" id="fgNewsCols"></div>
+  </div>
+
+  <div class="fg-footer">
+    * PBR '왜곡됨'은 대규모 자사주 매입으로 장부상 자기자본이 크게 줄어들어 PBR·ROE가 비정상적으로 높게 계산되는 경우를 뜻합니다.<br>
+    애널리스트 투자의견은 컨센서스 예시이며, 특정 종목의 매수·매도를 권유하는 것이 아닙니다. 투자 판단과 책임은 투자자 본인에게 있습니다.<br>
+    '지금 주목받는 섹터 레이더'는 고정된 예시 목록입니다. 실제로는 뉴스량, ETF 자금 유입, 특허 출원 등의 데이터를 자동 집계해 갱신하는 방식을 검토할 수 있습니다.<br>
+    ⚠ 위 수치는 화면 구성을 보여주기 위한 <b>샘플(가상) 데이터</b>이며 실제 재무정보와 다릅니다. 다음 단계에서 실시간 재무데이터 API(DART, 증권사 API 등)와 연동할 수 있습니다.
+  </div>
+</div>
+
+<script>
+(function(){
+  const SEG_COLORS = ['#A9822B','#2F6F4E','#5B6478','#AD4429','#7A8FA6'];
+
+  const METRICS = [
+    { group: '수익성', key: 'revenue', label: '매출액', desc: '한 해 동안 벌어들인 전체 판매금액' },
+    { group: '수익성', key: 'opProfit', label: '영업이익', desc: '본업으로 남긴 이익 (매출 − 원가·판관비)' },
+    { group: '수익성', key: 'netProfit', label: '당기순이익', desc: '세금 등을 다 뗀 뒤 최종적으로 남은 이익' },
+    { group: '수익성', key: 'opMargin', label: '영업이익률', desc: '매출 대비 영업이익 비율, 높을수록 본업이 튼튼함' },
+    { group: '안정성', key: 'debtRatio', label: '부채비율', desc: '자기자본 대비 빚의 비율, 보통 100% 이하면 안전권' },
+    { group: '안정성', key: 'currentRatio', label: '유동비율', desc: '단기 부채 대비 단기 현금화 가능 자산, 100% 이상이면 양호' },
+    { group: '효율성', key: 'roe', label: 'ROE (자기자본이익률)', desc: '주주 돈으로 얼마나 효율적으로 이익을 냈는지' },
+    { group: '효율성', key: 'roa', label: 'ROA (총자산이익률)', desc: '회사가 가진 전체 자산 대비 이익 효율' },
+    { group: '밸류에이션', key: 'per', label: 'PER (주가수익비율)', desc: '주가가 순이익의 몇 배인지, 낮을수록 저평가 신호. 단 이익의 질도 함께 봐야 함' },
+    { group: '밸류에이션', key: 'pbr', label: 'PBR (주가순자산비율)', desc: '주가가 순자산(자기자본)의 몇 배인지' },
+  ];
+
+  const DATA = [
+    {
+      id:'005930', name:'삼성전자', ticker:'005930.KS', market:'KR', sector:'반도체·전자',
+      financials:{
+        revenue:{v:'300.9조원', yoy:10.2}, opProfit:{v:'35.2조원', yoy:45.6}, netProfit:{v:'30.1조원', yoy:38.4},
+        opMargin:{v:'11.7%', yoy:3.1}, debtRatio:{v:'27%', yoy:-1.4}, currentRatio:{v:'218%', yoy:6.0},
+        roe:{v:'9.8%', yoy:2.6}, roa:{v:'7.1%', yoy:1.8},
+        per:{v:'14.5배', yoy:null}, pbr:{v:'1.4배', yoy:null}
+      },
+      segments:[ {name:'DS(반도체)', pct:45}, {name:'DX(모바일·가전)', pct:40}, {name:'SDC(디스플레이)', pct:15} ],
+      cashflow:{ ocf:'48.2조원', capex:'32.6조원', fcf:'15.6조원', fcfYoy:22.4, fcfMarginPct:5.2, useTag:'재투자형',
+        useDesc:'HBM·파운드리 설비 증설에 잉여현금 대부분을 투자하면서도 배당은 안정적으로 유지하고 있습니다.' },
+      earningsQuality:{ flag:'good', note:'영업외손익 비중이 낮아 영업이익과 순이익의 흐름이 비슷하게 움직입니다. 이익의 질은 양호한 편.' },
+      analyst:{ rating:'매수', numAnalysts:32, currentPrice:'81,500원', targetPrice:'92,000원', upsidePct:12.9, trend:'최근 1개월간 목표주가가 소폭 상향 조정되는 추세입니다.' },
+      sectorGrowth:{ flag:'caution', stage:'회복~고성장 전환기', cagr:'연 9~12% (메모리 시장 기준)' },
+      industry:{ trend:'메모리 업황이 저점을 지나 가격 반등 국면에 진입, AI 서버향 HBM 수요가 실적을 견인하고 있습니다.',
+        competitors:'TSMC(파운드리), SK하이닉스(메모리) 대비 종합 반도체 포트폴리오가 강점이나 HBM 점유율은 열세.',
+        growth:'HBM4·2나노 파운드리 양산, 온디바이스 AI향 모바일 수요 확대가 향후 1~2년 핵심 변수.' },
+      news:[
+        {date:'2026.08', tag:'invest', title:'HBM4 양산 라인 증설에 대규모 설비 투자 발표'},
+        {date:'2026.07', tag:'strategy', title:'파운드리 사업부, 대형 고객사 수주 확대 전략 공개'},
+        {date:'2026.06', tag:'risk', title:'중국 반도체 수출 규제 강화 이슈로 단기 변동성 확대'},
+      ]
+    },
+    {
+      id:'000660', name:'SK하이닉스', ticker:'000660.KS', market:'KR', sector:'반도체',
+      financials:{
+        revenue:{v:'66.2조원', yoy:102.3}, opProfit:{v:'23.5조원', yoy:'turnaround'}, netProfit:{v:'19.8조원', yoy:'turnaround'},
+        opMargin:{v:'35.5%', yoy:29.8}, debtRatio:{v:'87%', yoy:-22.0}, currentRatio:{v:'132%', yoy:18.5},
+        roe:{v:'28.4%', yoy:31.0}, roa:{v:'12.9%', yoy:14.2},
+        per:{v:'8.9배', yoy:null}, pbr:{v:'2.1배', yoy:null}
+      },
+      segments:[ {name:'D램', pct:70}, {name:'낸드', pct:30} ],
+      cashflow:{ ocf:'29.4조원', capex:'24.8조원', fcf:'4.6조원', fcfYoy:'turnaround', fcfMarginPct:6.9, useTag:'재투자형',
+        useDesc:'HBM 설비 증설에 막대한 설비투자(CapEx)를 집행 중이라, 이익 규모에 비해 잉여현금은 아직 두텁지 않습니다.' },
+      earningsQuality:{ flag:'caution', note:'적자에서 급반등한 구간이라 PER(8.9배)이 매우 낮아 보이지만, 이는 이익 급증에 따른 착시일 수 있어 이익의 지속가능성을 함께 봐야 합니다.' },
+      analyst:{ rating:'매수', numAnalysts:28, currentPrice:'245,000원', targetPrice:'285,000원', upsidePct:16.3, trend:'HBM 실적 기대감에 목표주가가 공격적으로 상향되고 있습니다.' },
+      sectorGrowth:{ flag:'good', stage:'고성장기', cagr:'연 15~20% (HBM 세부시장 기준)' },
+      industry:{ trend:'AI 서버 투자 확대로 HBM·고성능 D램 수요가 급증, 메모리 슈퍼사이클 초입이라는 평가.',
+        competitors:'HBM 시장에서 삼성전자·마이크론 대비 선두 지위, 엔비디아向 공급 안정성이 핵심 경쟁력.',
+        growth:'HBM4 조기 양산, 낸드 감산 효과에 따른 가격 정상화가 향후 성장 동력.' },
+      news:[
+        {date:'2026.08', tag:'strategy', title:'HBM4 샘플 공급 개시, 주요 고객사 인증 절차 진행'},
+        {date:'2026.07', tag:'invest', title:'청주 신규 팹 투자 계획 구체화'},
+        {date:'2026.06', tag:'risk', title:'메모리 가격 급등에 따른 고객사 재고 조정 우려 제기'},
+      ]
+    },
+    {
+      id:'035720', name:'카카오', ticker:'035720.KS', market:'KR', sector:'플랫폼·인터넷',
+      financials:{
+        revenue:{v:'7.9조원', yoy:4.6}, opProfit:{v:'0.48조원', yoy:-8.1}, netProfit:{v:'0.15조원', yoy:-60.2},
+        opMargin:{v:'6.1%', yoy:-0.8}, debtRatio:{v:'62%', yoy:3.0}, currentRatio:{v:'145%', yoy:-5.0},
+        roe:{v:'2.1%', yoy:-3.4}, roa:{v:'1.0%', yoy:-1.6},
+        per:{v:'45배', yoy:null}, pbr:{v:'1.1배', yoy:null}
+      },
+      segments:[ {name:'톡비즈(광고·커머스)', pct:45}, {name:'플랫폼 기타', pct:25}, {name:'콘텐츠', pct:30} ],
+      cashflow:{ ocf:'1.1조원', capex:'0.4조원', fcf:'0.7조원', fcfYoy:-18.0, fcfMarginPct:8.9, useTag:'주주환원·자산정리형',
+        useDesc:'자사주 매입과 비핵심 자산 정리에 잉여현금을 주로 활용 중이며, 신사업 재투자 여력은 상대적으로 제한적입니다.' },
+      earningsQuality:{ flag:'warning', note:'이번 순이익에는 부동산·계열사 지분 매각이익이 상당 부분 포함되어 있습니다. 이를 제외한 본업 기준 이익은 더 낮으며, 조정 PER은 90배 안팎까지 올라갑니다. 표면 지표만 보면 실제보다 좋아 보일 수 있어요.' },
+      analyst:{ rating:'중립', numAnalysts:19, currentPrice:'39,800원', targetPrice:'42,000원', upsidePct:5.5, trend:'실적 눈높이가 낮아지며 목표주가가 하향 조정되는 추세입니다.' },
+      sectorGrowth:{ flag:'caution', stage:'성숙기(성장 둔화)', cagr:'연 3~5%' },
+      industry:{ trend:'광고 시장 성장 둔화와 콘텐츠 자회사 실적 부진이 겹치며 성장세가 정체되는 국면.',
+        competitors:'네이버 대비 광고·커머스 경쟁력이 약화, 카카오톡 트래픽 우위는 여전히 유효.',
+        growth:'AI 기반 카카오톡 개편, 비핵심 자회사 정리를 통한 수익성 회복이 관건.' },
+      news:[
+        {date:'2026.08', tag:'risk', title:'주요 계열사 실적 부진으로 연결 영업이익 시장 기대치 하회'},
+        {date:'2026.07', tag:'strategy', title:'카카오톡 내 AI 개인화 기능 전면 개편 발표'},
+        {date:'2026.06', tag:'invest', title:'비핵심 자회사 지분 매각을 통한 재무구조 개선 추진'},
+      ]
+    },
+    {
+      id:'AAPL', name:'Apple', ticker:'AAPL', market:'US', sector:'스마트폰·하드웨어',
+      financials:{
+        revenue:{v:'$391B', yoy:6.1}, opProfit:{v:'$124B', yoy:9.2}, netProfit:{v:'$101B', yoy:8.0},
+        opMargin:{v:'31.7%', yoy:0.9}, debtRatio:{v:'145%', yoy:4.0}, currentRatio:{v:'98%', yoy:-2.0},
+        roe:{v:'152%', yoy:11.0}, roa:{v:'28%', yoy:1.5},
+        per:{v:'31배', yoy:null}, pbr:{v:'왜곡됨*', yoy:null}
+      },
+      segments:[ {name:'iPhone', pct:52}, {name:'서비스', pct:24}, {name:'Mac·iPad·웨어러블', pct:24} ],
+      cashflow:{ ocf:'$118B', capex:'$11B', fcf:'$107B', fcfYoy:7.5, fcfMarginPct:27.4, useTag:'주주환원형',
+        useDesc:'잉여현금 대부분을 배당과 대규모 자사주 매입에 사용, 대형 신규 투자보다는 주주환원에 무게를 두고 있습니다.' },
+      earningsQuality:{ flag:'good', note:'영업이익과 순이익 흐름은 일치해 이익의 질 자체는 양호합니다. 다만 매우 높은 ROE(152%)와 왜곡된 PBR(*)은 자사주 매입으로 자기자본이 줄어든 효과가 크다는 점을 감안해야 합니다.' },
+      analyst:{ rating:'매수', numAnalysts:41, currentPrice:'$228', targetPrice:'$255', upsidePct:11.8, trend:'온디바이스 AI 기능에 대한 기대감으로 목표주가가 상향되고 있습니다.' },
+      sectorGrowth:{ flag:'caution', stage:'성숙기', cagr:'연 3~4% (스마트폰 시장 기준)' },
+      industry:{ trend:'스마트폰 교체 주기가 길어지는 가운데, 고마진 서비스 매출 비중 확대가 실적을 방어.',
+        competitors:'삼성전자와 프리미엄폰 시장을 양분, 온디바이스 AI 기능 경쟁이 본격화.',
+        growth:'Apple Intelligence 등 온디바이스 AI 기능이 교체 수요를 자극할 수 있을지가 관건.' },
+      news:[
+        {date:'2026.08', tag:'strategy', title:'차세대 아이폰에 온디바이스 AI 기능 대폭 강화 발표'},
+        {date:'2026.07', tag:'invest', title:'대규모 자사주 매입 프로그램 연장 승인'},
+        {date:'2026.06', tag:'risk', title:'주요 부품 공급망 관련 관세 이슈로 원가 부담 우려'},
+      ]
+    },
+    {
+      id:'MSFT', name:'Microsoft', ticker:'MSFT', market:'US', sector:'소프트웨어·클라우드',
+      financials:{
+        revenue:{v:'$270B', yoy:16.4}, opProfit:{v:'$122B', yoy:19.1}, netProfit:{v:'$95B', yoy:15.3},
+        opMargin:{v:'45.2%', yoy:1.4}, debtRatio:{v:'45%', yoy:-2.0}, currentRatio:{v:'155%', yoy:3.0},
+        roe:{v:'34.5%', yoy:2.9}, roa:{v:'16.8%', yoy:1.1},
+        per:{v:'33배', yoy:null}, pbr:{v:'11.2배', yoy:null}
+      },
+      segments:[ {name:'클라우드(Azure 등)', pct:45}, {name:'생산성(Office 등)', pct:32}, {name:'PC·게임 등', pct:23} ],
+      cashflow:{ ocf:'$135B', capex:'$65B', fcf:'$70B', fcfYoy:5.0, fcfMarginPct:25.9, useTag:'균형형',
+        useDesc:'클라우드 데이터센터 재투자와 배당·자사주 매입을 함께 병행하고 있습니다.' },
+      earningsQuality:{ flag:'good', note:'영업외손익 비중이 낮고 이익 흐름이 안정적입니다. 이익의 질 양호.' },
+      analyst:{ rating:'매수', numAnalysts:45, currentPrice:'$495', targetPrice:'$560', upsidePct:13.1, trend:'클라우드 성장세가 이어지며 목표주가가 꾸준히 상향되고 있습니다.' },
+      sectorGrowth:{ flag:'good', stage:'고성장기', cagr:'연 18~22% (클라우드·AI 인프라 시장)' },
+      industry:{ trend:'기업용 AI 도입 확산으로 클라우드·코파일럿 매출이 빠르게 성장, 수익성도 동반 개선.',
+        competitors:'아마존 AWS, 구글 클라우드와 클라우드 시장을 3강 구도로 경쟁, AI 소프트웨어 결합력이 강점.',
+        growth:'코파일럿 유료 전환율 확대와 데이터센터 증설이 향후 1~2년 핵심 성장 동력.' },
+      news:[
+        {date:'2026.08', tag:'invest', title:'AI 데이터센터 인프라에 대규모 추가 투자 발표'},
+        {date:'2026.07', tag:'strategy', title:'코파일럿 기업용 요금제 개편 및 기능 확대'},
+        {date:'2026.06', tag:'risk', title:'전력·GPU 공급 제약에 따른 데이터센터 증설 지연 우려'},
+      ]
+    },
+    {
+      id:'NVDA', name:'NVIDIA', ticker:'NVDA', market:'US', sector:'반도체·AI',
+      financials:{
+        revenue:{v:'$130B', yoy:114.6}, opProfit:{v:'$81B', yoy:150.2}, netProfit:{v:'$72B', yoy:140.8},
+        opMargin:{v:'62.3%', yoy:9.0}, debtRatio:{v:'40%', yoy:2.0}, currentRatio:{v:'410%', yoy:15.0},
+        roe:{v:'91%', yoy:18.0}, roa:{v:'55%', yoy:10.0},
+        per:{v:'55배', yoy:null}, pbr:{v:'40배', yoy:null}
+      },
+      segments:[ {name:'데이터센터(AI)', pct:87}, {name:'게이밍', pct:9}, {name:'기타', pct:4} ],
+      cashflow:{ ocf:'$74B', capex:'$10B', fcf:'$64B', fcfYoy:135.0, fcfMarginPct:49.2, useTag:'재투자형',
+        useDesc:'PER이 높은데도 잉여현금 대부분을 차세대 GPU 개발과 생산능력 확대에 재투자하고 있습니다.' },
+      earningsQuality:{ flag:'good', note:'이익 성장이 매출 성장과 함께 나타나 이익의 질 자체는 양호합니다. 다만 PER 55배에는 고성장이 계속될 거라는 기대가 크게 반영되어 있다는 점은 감안해야 합니다.' },
+      analyst:{ rating:'매수', numAnalysts:50, currentPrice:'$178', targetPrice:'$210', upsidePct:18.0, trend:'고성장 지속 전망에 목표주가는 상향되지만, 일부에서는 밸류에이션 부담 의견도 나옵니다.' },
+      sectorGrowth:{ flag:'good', stage:'초고성장기', cagr:'연 30%+ (AI 가속기 시장)' },
+      industry:{ trend:'생성형 AI 인프라 투자 붐의 최대 수혜주로, 데이터센터 GPU 수요가 공급을 초과하는 상황이 지속.',
+        competitors:'AMD, 자체 AI칩을 개발하는 빅테크(구글 TPU 등) 대비 소프트웨어(CUDA) 생태계 우위가 핵심 해자.',
+        growth:'차세대 GPU 아키텍처 양산과 주권 AI(소버린 AI) 수요 확대가 다음 성장 축.' },
+      news:[
+        {date:'2026.08', tag:'strategy', title:'차세대 GPU 아키텍처 로드맵 공개, 주요 고객사 선주문 접수'},
+        {date:'2026.07', tag:'invest', title:'주요 클라우드 업체와 대규모 장기 공급 계약 체결'},
+        {date:'2026.06', tag:'risk', title:'수출 규제 강화로 일부 국가향 매출 불확실성 부각'},
+      ]
+    },
+  ];
+
+  let selected = [];
+
+  function fmtYoy(yoy){
+    if (yoy === 'turnaround') return { text:'흑자전환', cls:'up' };
+    const sign = yoy > 0 ? '+' : '';
+    const cls = yoy > 0 ? 'up' : (yoy < 0 ? 'down' : 'gold');
+    return { text: sign + yoy.toFixed(1) + '%', cls };
+  }
+
+  function qLabel(flag){
+    return flag === 'good' ? '양호' : (flag === 'caution' ? '주의' : '경고');
+  }
+
+  const COMPANY_COLORS = ['#171B24', '#7C5CFC', '#4C7A93'];
+
+  function parseNum(str){
+    const n = parseFloat(String(str).replace(/[^0-9.\-]/g, ''));
+    return isNaN(n) ? null : n;
+  }
+
+  const CHART_METRICS = [
+    { label:'영업이익률', hint:'높을수록 유리', unit:'%', get:(c) => parseNum(c.financials.opMargin.v) },
+    { label:'ROE', hint:'높을수록 유리 (부채효과 주의)', unit:'%', get:(c) => parseNum(c.financials.roe.v) },
+    { label:'부채비율', hint:'낮을수록 유리', unit:'%', get:(c) => parseNum(c.financials.debtRatio.v) },
+    { label:'PER', hint:'낮을수록 저평가 (이익의 질도 확인)', unit:'배', get:(c) => parseNum(c.financials.per.v) },
+    { label:'FCF 마진 (FCF/매출)', hint:'높을수록 유리', unit:'%', get:(c) => c.cashflow.fcfMarginPct },
+  ];
+
+  function renderCharts(){
+    const wrap = document.getElementById('fgChartWrap');
+    const legend = document.getElementById('fgChartLegend');
+    const grid = document.getElementById('fgChartGrid');
+    const comps = getSelectedCompanies();
+    if (!comps.length) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+    legend.innerHTML = comps.map((c,i) => `<span><i style="background:${COMPANY_COLORS[i]}"></i>${c.name}</span>`).join('');
+    grid.innerHTML = CHART_METRICS.map(m => {
+      const vals = comps.map(c => ({ name: c.name, v: m.get(c) }));
+      const max = Math.max(...vals.map(x => Math.abs(x.v ?? 0)), 0.0001);
+      const rows = vals.map((x, i) => {
+        const pct = x.v == null ? 0 : Math.max(4, Math.min(100, (Math.abs(x.v) / max) * 100));
+        const valText = x.v == null ? '-' : (x.v + m.unit);
+        return `<div class="fg-chart-row">
+          <span class="fg-chart-name">${x.name}</span>
+          <div class="fg-chart-track"><div class="fg-chart-fill" style="width:${pct}%;background:${COMPANY_COLORS[i]}"></div></div>
+          <span class="fg-chart-value">${valText}</span>
+        </div>`;
+      }).join('');
+      return `<div class="fg-chart-metric">
+        <div class="fg-chart-title">${m.label}<span class="fg-chart-hint">(${m.hint})</span></div>
+        ${rows}
+      </div>`;
+    }).join('');
+  }
+
+  const RADAR_SECTORS = [
+    { name:'AI 반도체·데이터센터 인프라', heat:5, desc:'생성형 AI 확산으로 GPU·HBM·전력 인프라 수요가 공급을 앞지르고 있습니다.', examples:['NVIDIA','SK하이닉스','TSMC'] },
+    { name:'원자력·SMR(소형모듈원전)', heat:4, desc:'AI 데이터센터의 급증하는 전력 수요로 원전이 다시 조명받고 있습니다.', examples:['두산에너빌리티','뉴스케일파워'] },
+    { name:'비만치료제(GLP-1)', heat:4, desc:'비만·당뇨 치료제 시장이 빠르게 확대되며 관련 공급망까지 관심이 번지고 있습니다.', examples:['노보노디스크','일라이릴리'] },
+    { name:'방산·우주항공', heat:4, desc:'지정학적 긴장이 장기화되며 각국 국방·우주 예산이 확대되는 추세입니다.', examples:['한화에어로스페이스','록히드마틴'] },
+    { name:'로보틱스·휴머노이드', heat:3, desc:'제조·물류 현장에 휴머노이드 로봇 도입 시도가 늘고 있으나 아직 상용화 초기 단계입니다.', examples:['테슬라(옵티머스)','현대차그룹'] },
+    { name:'스테이블코인·디지털자산 인프라', heat:3, desc:'관련 제도가 정비되며 결제·금융 인프라로 편입하려는 시도가 늘고 있습니다.', examples:['코인베이스','서클'] },
+  ];
+
+  function renderRadar(){
+    const el = document.getElementById('fgRadarList');
+    el.innerHTML = RADAR_SECTORS.map(s => `
+      <div class="fg-radar-item">
+        <div class="fg-radar-heat">${[1,2,3,4,5].map(i => `<span class="${i <= s.heat ? 'on' : ''}"></span>`).join('')}</div>
+        <div class="fg-radar-body">
+          <div class="fg-radar-name">${s.name}</div>
+          <div class="fg-radar-desc">${s.desc}</div>
+          <div class="fg-radar-chips">${s.examples.map(x => `<span class="fg-radar-chip">${x}</span>`).join('')}</div>
+        </div>
+      </div>`).join('');
+  }
+
+  const CALENDAR_EVENTS = [
+    { date:'2026-09-10', type:'실적발표', title:'Oracle 분기 실적 발표', importance:'medium',
+      consensus:'EPS $1.45', prior:'EPS $1.39', why:'AI 클라우드 인프라 수주 흐름을 가늠할 수 있는 지표로 주목받고 있습니다.' },
+    { date:'2026-09-11', type:'경제지표', title:'미국 8월 CPI(소비자물가지수)', importance:'high',
+      consensus:'전년비 +2.8%', prior:'전년비 +2.9%', why:'예상보다 높으면 금리 인하 기대가 후퇴해 증시 전반에 부담을 줄 수 있습니다.' },
+    { date:'2026-09-17', type:'FOMC', title:'FOMC 정례회의 · 금리 결정', importance:'high',
+      consensus:'동결 (4.25~4.50%)', prior:'4.25~4.50%', why:'점도표와 파월 의장 기자회견 발언이 향후 인하 속도에 대한 힌트를 줍니다.' },
+    { date:'2026-09-19', type:'경제지표', title:'미국 8월 소매판매', importance:'medium',
+      consensus:'전월비 +0.3%', prior:'전월비 +0.5%', why:'소비 심리가 꺾이는지 확인할 수 있는 지표입니다.' },
+    { date:'2026-09-24', type:'실적발표', title:'Micron 분기 실적 발표', importance:'medium',
+      consensus:'EPS $1.80', prior:'EPS $1.30', why:'메모리 반도체 업황의 방향성을 보여줘 삼성전자·SK하이닉스에도 참고가 됩니다.' },
+    { date:'2026-10-03', type:'경제지표', title:'미국 9월 고용보고서(비농업고용)', importance:'high',
+      consensus:'+150K', prior:'+142K', why:'고용이 예상보다 강하면 금리 인하가 늦춰질 수 있어 시장이 민감하게 반응합니다.' },
+    { date:'2026-10-29', type:'FOMC', title:'FOMC 정례회의 · 금리 결정', importance:'high',
+      consensus:'25bp 인하 가능성 논의', prior:'동결', why:'연속 동결 이후 첫 인하 여부가 관심사입니다.' },
+    { date:'2026-11-06', type:'실적발표', title:'NVIDIA 분기 실적 발표', importance:'high',
+      consensus:'EPS $1.05', prior:'EPS $0.89', why:'AI 인프라 투자가 계속되는지 보여주는 시장의 최대 관심 이벤트 중 하나입니다.' },
+  ];
+
+  const MONTH_ABBR = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+
+  function renderCalendar(){
+    const el = document.getElementById('fgCalList');
+    el.innerHTML = CALENDAR_EVENTS.map(ev => {
+      const [y, mo, d] = ev.date.split('-').map(Number);
+      return `
+      <div class="fg-cal-item">
+        <div class="fg-cal-date">
+          <div class="fg-cal-d">${d}</div>
+          <div class="fg-cal-m">${MONTH_ABBR[mo - 1]}</div>
+        </div>
+        <div class="fg-cal-body">
+          <div class="fg-cal-title-row">
+            <span class="fg-cal-dot ${ev.importance}"></span>
+            <span class="fg-cal-title">${ev.title}</span>
+            <span class="fg-cal-type">${ev.type}</span>
+          </div>
+          <div class="fg-cal-stats">
+            <div>기준치(컨센서스)<b>${ev.consensus}</b></div>
+            <div>이전치<b>${ev.prior}</b></div>
+          </div>
+          <div class="fg-cal-why">${ev.why}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderTape(){
+    const el = document.getElementById('fgTape');
+    el.innerHTML = DATA.map(c => `<span>${c.ticker} · ${c.name}</span>`).join('');
+  }
+
+  function renderGrid(filter){
+    const el = document.getElementById('fgGrid');
+    const f = (filter || '').trim().toLowerCase();
+    const list = DATA.filter(c => !f ||
+      c.name.toLowerCase().includes(f) ||
+      c.ticker.toLowerCase().includes(f) ||
+      c.id.toLowerCase().includes(f));
+    el.innerHTML = list.map(c => `
+      <div class="fg-card ${selected.includes(c.id) ? 'sel':''}" data-id="${c.id}">
+        <div class="fg-name">${c.name}</div>
+        <div class="fg-ticker">${c.ticker}</div>
+        <div class="fg-sector">${c.sector}</div>
+        <span class="fg-badge ${c.market.toLowerCase()}">${c.market}</span>
+        <span class="fg-qbadge ${c.earningsQuality.flag}">이익의 질 ${qLabel(c.earningsQuality.flag)}</span>
+      </div>`).join('') || '<div class="fg-empty">검색 결과가 없습니다.</div>';
+    el.querySelectorAll('.fg-card').forEach(card => {
+      card.addEventListener('click', () => toggleSelect(card.getAttribute('data-id')));
+    });
+  }
+
+  function toggleSelect(id){
+    if (selected.includes(id)) {
+      selected = selected.filter(x => x !== id);
+    } else {
+      if (selected.length >= 3) {
+        alert('최대 3개 종목까지 비교할 수 있어요.');
+        return;
+      }
+      selected.push(id);
+    }
+    renderAll();
+  }
+
+  function getSelectedCompanies(){
+    return selected.map(id => DATA.find(c => c.id === id));
+  }
+
+  function renderChips(){
+    const el = document.getElementById('fgChips');
+    const comps = getSelectedCompanies();
+    if (!comps.length) { el.innerHTML = ''; return; }
+    el.innerHTML = `<div class="fg-chiprow">${comps.map(c => `
+        <span class="fg-chip">${c.name}<button data-id="${c.id}">✕</button></span>`).join('')}
+        <button class="fg-reset" id="fgResetBtn">전체 해제</button>
+      </div>`;
+    el.querySelectorAll('.fg-chip button').forEach(b => b.addEventListener('click', () => toggleSelect(b.getAttribute('data-id'))));
+    const reset = document.getElementById('fgResetBtn');
+    if (reset) reset.addEventListener('click', () => { selected = []; renderAll(); });
+  }
+
+  function renderCompare(){
+    const wrap = document.getElementById('fgCompareBody');
+    const comps = getSelectedCompanies();
+    if (!comps.length) {
+      wrap.innerHTML = '<div class="fg-empty">위에서 비교할 종목을 1개 이상 선택해주세요.</div>';
+      return;
+    }
+    let rows = '';
+    let lastGroup = null;
+    METRICS.forEach(m => {
+      if (m.group !== lastGroup) {
+        rows += `<tr class="fg-grouprow"><td colspan="${comps.length + 1}" data-label="${m.group}"></td></tr>`;
+        lastGroup = m.group;
+      }
+      rows += `<tr>
+        <td class="fg-metric"><div class="fg-mname">${m.label}</div><div class="fg-mdesc">${m.desc}</div></td>
+        ${comps.map(c => {
+          const f = c.financials[m.key];
+          if (f.yoy === null || f.yoy === undefined) {
+            return `<td class="fg-val"><span class="fg-num">${f.v}</span></td>`;
+          }
+          const yoy = fmtYoy(f.yoy);
+          return `<td class="fg-val"><span class="fg-num">${f.v}</span><span class="fg-yoy ${yoy.cls}">${yoy.text}</span></td>`;
+        }).join('')}
+      </tr>`;
+    });
+    wrap.innerHTML = `<div class="fg-scroll"><table class="fg-table">
+      <thead><tr><th></th>${comps.map(c => `<th class="fg-colhead">${c.name}<br><span style="font-weight:500;">${c.ticker}</span><br><span class="fg-qbadge ${c.earningsQuality.flag}">이익의 질 ${qLabel(c.earningsQuality.flag)}</span></th>`).join('')}</tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>`;
+  }
+
+  function renderSegments(){
+    const wrap = document.getElementById('fgSegWrap');
+    const cols = document.getElementById('fgSegCols');
+    const comps = getSelectedCompanies();
+    if (!comps.length) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+    cols.style.setProperty('--cols', comps.length);
+    cols.innerHTML = comps.map(c => `
+      <div class="fg-seg-card">
+        <h3>${c.name}</h3>
+        <div class="fg-seg-bar">${c.segments.map((s,i) => `<span style="width:${s.pct}%;background:${SEG_COLORS[i % SEG_COLORS.length]}"></span>`).join('')}</div>
+        <div class="fg-seg-legend">${c.segments.map((s,i) => `<span><i style="background:${SEG_COLORS[i % SEG_COLORS.length]}"></i>${s.name} ${s.pct}%</span>`).join('')}</div>
+      </div>`).join('');
+  }
+
+  function ratingFlag(rating){
+    return rating === '매수' ? 'good' : (rating === '중립' ? 'caution' : 'warning');
+  }
+
+  function renderAnalyst(){
+    const wrap = document.getElementById('fgAnWrap');
+    const cols = document.getElementById('fgAnCols');
+    const comps = getSelectedCompanies();
+    if (!comps.length) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+    cols.style.setProperty('--cols', comps.length);
+    cols.innerHTML = comps.map(c => {
+      const a = c.analyst;
+      const up = a.upsidePct >= 0;
+      return `
+      <div class="fg-cf-card">
+        <h3>${c.name} <span class="fg-qbadge ${ratingFlag(a.rating)}">${a.rating}</span></h3>
+        <div class="fg-cf-nums">
+          <div>현재가<b>${a.currentPrice}</b></div>
+          <div>평균 목표주가<b>${a.targetPrice}</b></div>
+          <div>상승여력<b><span class="fg-yoy ${up ? 'up' : 'down'}" style="margin-left:0;">${up ? '+' : ''}${a.upsidePct.toFixed(1)}%</span></b></div>
+        </div>
+        <span class="fg-cf-tag">애널리스트 ${a.numAnalysts}명 평균</span>
+        <div class="fg-cf-desc">${a.trend}</div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderCashflow(){
+    const wrap = document.getElementById('fgCfWrap');
+    const cols = document.getElementById('fgCfCols');
+    const comps = getSelectedCompanies();
+    if (!comps.length) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+    cols.style.setProperty('--cols', comps.length);
+    cols.innerHTML = comps.map(c => {
+      const fcfYoy = c.cashflow.fcfYoy;
+      const yoyHtml = fcfYoy === undefined ? '' : (() => {
+        const y = fmtYoy(fcfYoy);
+        return `<span class="fg-yoy ${y.cls}" style="margin-left:6px;">${y.text}</span>`;
+      })();
+      return `
+      <div class="fg-cf-card">
+        <h3>${c.name} <span class="fg-qbadge ${c.earningsQuality.flag}">이익의 질 ${qLabel(c.earningsQuality.flag)}</span></h3>
+        <div class="fg-cf-nums">
+          <div>영업활동현금흐름<b>${c.cashflow.ocf}</b></div>
+          <div>설비투자(CapEx)<b>${c.cashflow.capex}</b></div>
+          <div>잉여현금흐름(FCF)<b>${c.cashflow.fcf}${yoyHtml}</b></div>
+        </div>
+        <span class="fg-cf-tag">${c.cashflow.useTag}</span>
+        <div class="fg-cf-desc">${c.cashflow.useDesc}</div>
+        <div class="fg-cf-note ${c.earningsQuality.flag}">${c.earningsQuality.note}</div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderIndustry(){
+    const wrap = document.getElementById('fgIndWrap');
+    const cols = document.getElementById('fgIndCols');
+    const comps = getSelectedCompanies();
+    if (!comps.length) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+    cols.style.setProperty('--cols', comps.length);
+    cols.innerHTML = comps.map(c => `
+      <div class="fg-ind-card">
+        <h3>${c.name} <span style="font-weight:400;color:var(--ink-soft);font-size:12px;">· ${c.sector}</span></h3>
+        <div class="fg-growth-row">
+          <span class="fg-qbadge ${c.sectorGrowth.flag}">${c.sectorGrowth.stage}</span>
+          <span class="fg-growth-cagr">시장 성장률(CAGR) ${c.sectorGrowth.cagr}</span>
+        </div>
+        <div class="fg-row"><div class="fg-k">산업 동향</div><div class="fg-v">${c.industry.trend}</div></div>
+        <div class="fg-row"><div class="fg-k">경쟁사 대비 포지셔닝</div><div class="fg-v">${c.industry.competitors}</div></div>
+        <div class="fg-row"><div class="fg-k">향후 1~2년 성장 동력</div><div class="fg-v">${c.industry.growth}</div></div>
+      </div>`).join('');
+  }
+
+  function renderNews(){
+    const wrap = document.getElementById('fgNewsWrap');
+    const cols = document.getElementById('fgNewsCols');
+    const comps = getSelectedCompanies();
+    if (!comps.length) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+    cols.style.setProperty('--cols', comps.length);
+    const tagLabel = { strategy:'전략', invest:'투자', risk:'리스크' };
+    cols.innerHTML = comps.map(c => `
+      <div class="fg-news-card">
+        <h3>${c.name}</h3>
+        ${c.news.map(n => `
+          <div class="fg-news-item">
+            <span class="fg-news-date">${n.date}</span>
+            <span class="fg-news-tag ${n.tag}">${tagLabel[n.tag]}</span>
+            <span>${n.title}</span>
+          </div>`).join('')}
+      </div>`).join('');
+  }
+
+  function renderAll(){
+    renderGrid(document.getElementById('fgSearch').value);
+    renderChips();
+    renderCompare();
+    renderCharts();
+    renderAnalyst();
+    renderSegments();
+    renderCashflow();
+    renderIndustry();
+    renderNews();
+  }
+
+  document.getElementById('fgSearch').addEventListener('input', (e) => renderGrid(e.target.value));
+  renderTape();
+  renderRadar();
+  renderCalendar();
+  renderAll();
+})();
+</script>
+
+
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+    });
+  }
+</script>
+
+</body>
+</html>
