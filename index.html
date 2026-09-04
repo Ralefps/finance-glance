@@ -169,6 +169,25 @@ table.fg-table th .fg-qbadge { margin-top: 6px; }
 .fg-radar-desc { font-size: 12.5px; color: var(--ink-soft); margin-bottom: 8px; }
 .fg-radar-chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .fg-radar-chip { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--surface); color: var(--ink-soft); }
+.fg-radar-news { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.fg-radar-news a { font-size: 12px; font-weight: 500; color: var(--down); text-decoration: none; }
+.fg-radar-news a:hover { text-decoration: underline; }
+
+.fg-qtr-cols { display: grid; gap: 16px; }
+.fg-qtr-card { border-radius: var(--radius-md); padding: 18px; background: var(--surface-alt); }
+.fg-qtr-card h3 { font-size: 14.5px; font-weight: 700; margin: 0 0 14px; }
+.fg-qtr-row { display: grid; grid-template-columns: 1fr; gap: 16px; }
+.fg-qtr-chart-title { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; font-weight: 700; color: var(--ink-soft); margin-bottom: 8px; }
+.fg-qtr-chart-title b { font-size: 14px; color: var(--ink); font-weight: 800; }
+.fg-qtr-chart svg { width: 100%; height: auto; display: block; }
+@media (min-width: 480px) {
+  .fg-qtr-row { grid-template-columns: 1fr 1fr; }
+}
+
+.fg-price-wrap svg { width: 100%; height: auto; display: block; }
+.fg-price-stats { display: flex; gap: 22px; flex-wrap: wrap; margin-bottom: 16px; }
+.fg-price-stats div { font-size: 12px; color: var(--ink-soft); font-weight: 500; }
+.fg-price-stats div b { display: block; font-size: 17px; color: var(--ink); font-weight: 800; margin-top: 4px; }
 
 .fg-chart-legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
 .fg-chart-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
@@ -239,6 +258,7 @@ table.fg-table th .fg-qbadge { margin-top: 6px; }
   <div class="fg-panel">
     <h2>지금 주목받는 섹터 레이더</h2>
     <p class="fg-sub">아직 특정 종목보다 산업 전체가 먼저 부각되는 초기 단계 테마들입니다. 종목 리서치를 시작하기 전 '요즘 뭐가 뜨는지' 훑어보는 용도로 참고하세요. 열기(●)가 높을수록 최근 뉴스·투자 관심이 뜨겁다는 뜻입니다.</p>
+    <p class="fg-note" id="fgRadarUpdated" style="margin-top:-6px;margin-bottom:14px;"></p>
     <div class="fg-radar-list" id="fgRadarList"></div>
   </div>
 
@@ -255,11 +275,25 @@ table.fg-table th .fg-qbadge { margin-top: 6px; }
     <div id="fgCompareBody"></div>
   </div>
 
+  <div class="fg-panel" id="fgQtrWrap" style="display:none;">
+    <h2>분기별 실적 추이 (최근 8분기)</h2>
+    <p class="fg-sub">YoY(전년 동기 대비)만 보면 최근 흐름이 좋아지는 중인지 나빠지는 중인지 놓치기 쉬워요. 분기별로 쪼개서 보면 추세가 더 잘 보입니다. 진하게 표시된 막대가 가장 최근 분기예요.</p>
+    <div class="fg-qtr-cols" id="fgQtrCols"></div>
+  </div>
+
   <div class="fg-panel" id="fgChartWrap" style="display:none;">
     <h2>핵심 지표 한눈에 비교</h2>
     <p class="fg-sub">투자 판단에서 자주 보는 지표만 골라 그래프로 비교했어요. 지표마다 유리한 방향(높을수록/낮을수록)이 다르니 함께 확인하세요.</p>
     <div class="fg-chart-legend" id="fgChartLegend"></div>
     <div class="fg-chart-grid" id="fgChartGrid"></div>
+  </div>
+
+  <div class="fg-panel" id="fgPriceWrap" style="display:none;">
+    <h2>주가 추이 (최근 3개월)</h2>
+    <p class="fg-sub">종목을 1개 선택하면 실제 주가 흐름을, 2~3개 선택하면 시작 시점(3개월 전) 대비 상승률을 겹쳐서 비교해줘요.</p>
+    <div class="fg-price-stats" id="fgPriceStats"></div>
+    <div class="fg-chart-legend" id="fgPriceLegend"></div>
+    <div class="fg-price-wrap" id="fgPriceChart"></div>
   </div>
 
   <div class="fg-panel" id="fgAnWrap" style="display:none;">
@@ -520,17 +554,48 @@ table.fg-table th .fg-qbadge { margin-top: 6px; }
     { name:'스테이블코인·디지털자산 인프라', heat:3, desc:'관련 제도가 정비되며 결제·금융 인프라로 편입하려는 시도가 늘고 있습니다.', examples:['코인베이스','서클'] },
   ];
 
-  function renderRadar(){
+  function renderRadar(themes){
     const el = document.getElementById('fgRadarList');
-    el.innerHTML = RADAR_SECTORS.map(s => `
+    const list = themes || RADAR_SECTORS;
+    el.innerHTML = list.map(s => {
+      const changeBadge = s.changeVsAvg
+        ? `<span class="fg-yoy ${s.changeVsAvg.trim().startsWith('-') ? 'down' : 'up'}" style="margin-left:8px;">${s.changeVsAvg} (24h)</span>`
+        : '';
+      const newsHtml = (s.articles && s.articles.length)
+        ? `<div class="fg-radar-news">${s.articles.slice(0, 3).map(a => `<a href="${a.link}" target="_blank" rel="noopener noreferrer">↗ ${a.title}</a>`).join('')}</div>`
+        : '';
+      return `
       <div class="fg-radar-item">
         <div class="fg-radar-heat">${[1,2,3,4,5].map(i => `<span class="${i <= s.heat ? 'on' : ''}"></span>`).join('')}</div>
         <div class="fg-radar-body">
-          <div class="fg-radar-name">${s.name}</div>
+          <div class="fg-radar-name">${s.name}${changeBadge}</div>
           <div class="fg-radar-desc">${s.desc}</div>
           <div class="fg-radar-chips">${s.examples.map(x => `<span class="fg-radar-chip">${x}</span>`).join('')}</div>
+          ${newsHtml}
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
+  }
+
+  // 배포된 백엔드가 있으면(data/sector-radar.json) 실시간 결과로 갈아끼우고,
+  // 없으면(단독 프로토타입으로 열람 중) 위의 고정 샘플을 그대로 보여줍니다.
+  function loadLiveRadarData(){
+    const updatedEl = document.getElementById('fgRadarUpdated');
+    updatedEl.textContent = '샘플 데이터 표시 중 (자동 업데이트 미연결)';
+    try {
+      fetch('./data/sector-radar.json')
+        .then(r => (r.ok ? r.json() : Promise.reject()))
+        .then(data => {
+          if (!data || !Array.isArray(data.themes)) return;
+          renderRadar(data.themes);
+          const d = new Date(data.generatedAt);
+          const stamp = isNaN(d) ? data.generatedAt : d.toLocaleString('ko-KR');
+          updatedEl.textContent = `마지막 업데이트: ${stamp} · 매일 자동 갱신`;
+        })
+        .catch(() => { /* 백엔드 미배포 시 조용히 샘플 유지 */ });
+    } catch (e) {
+      /* fetch 자체를 쓸 수 없는 환경이면 샘플 데이터를 그대로 둔다 */
+    }
   }
 
   const CALENDAR_EVENTS = [
@@ -686,6 +751,191 @@ table.fg-table th .fg-qbadge { margin-top: 6px; }
     return rating === '매수' ? 'good' : (rating === '중립' ? 'caution' : 'warning');
   }
 
+  const PRICE_HISTORY = {"005930":[75463,75413,75333,75318,76162,76129,74650,75103,74923,74797,75022,75369,76701,77497,77716,77039,76069,76432,77920,78066,78056,78720,77287,77060,77680,78705,78553,79054,79418,80347,79274,79977,78479,75813,75275,74410,75437,76242,75056,76054,75097,75109,74901,75124,76091,76868,77340,78129,78737,78177,77522,77128,77758,77596,80166,79403,78344,79259,80863,81500],"000660":[181481,184338,188694,189188,186306,185687,188840,185905,186723,188099,188030,190601,192810,199440,201748,200933,200238,198858,202010,201303,201857,204493,203388,203374,199429,197411,196702,198491,202256,202942,204338,205498,208987,211989,213417,211581,214609,216310,220160,220817,226512,226333,231113,232138,231559,229425,229774,234123,236930,239413,234109,236648,238793,238129,237268,237994,243110,241162,240807,245000],"035720":[45227,44713,44251,44081,43063,42970,41973,42301,42072,43286,43232,43865,42808,42498,42471,43345,42049,42444,42587,43326,43545,43346,42784,41762,41654,41301,42348,41730,41701,40476,39993,39927,40217,40902,40642,39703,39761,39857,39936,39261,39747,39571,39782,40357,40511,40461,41592,41514,41095,40934,41641,41485,41582,42107,41551,40226,40183,40097,39480,39800],"AAPL":[215.09,216.79,213.66,215.08,214.36,209.76,210.99,210.72,208.34,209.78,211.12,209.24,210.31,213.24,210.95,211.97,211.84,218.53,212.79,214.75,213.69,213.25,218.85,218.69,225.3,223.83,224.75,223.14,220.93,220.98,220.0,220.47,214.0,219.89,219.26,224.37,221.2,221.95,231.35,228.59,223.95,222.17,223.46,225.42,229.17,228.26,223.3,221.86,225.46,226.72,220.7,220.46,224.53,230.8,232.36,233.16,229.29,226.61,226.62,228],"MSFT":[454.13,458.83,456.81,450.5,446.58,440.24,445.34,431.66,430.56,434.43,445.13,446.6,453.98,452.46,448.74,445.47,456.2,463.54,467.65,489.84,490.66,495.62,498.59,498.2,513.94,524.53,516.65,515.13,518.87,524.86,517.31,503.98,492.88,493.44,493.81,497.02,493.14,486.37,474.53,477.64,481.01,488.34,494.38,494.19,503.78,503.93,500.75,498.45,495.75,483.0,485.01,487.62,486.33,482.81,486.19,498.12,499.38,497.17,494.43,495],"NVDA":[127.14,125.57,126.02,126.81,130.77,133.13,135.64,135.05,136.92,135.57,136.8,138.23,137.54,141.78,143.46,140.75,142.41,142.37,143.05,144.55,145.93,142.97,141.59,143.64,146.63,150.7,154.59,151.6,153.65,150.92,154.47,155.59,154.24,158.5,160.32,157.63,158.83,158.21,159.08,158.93,162.05,160.2,161.44,165.34,164.55,165.6,166.64,166.09,167.92,168.77,167.77,171.58,173.67,174.05,173.59,172.87,175.74,176.16,177.65,178]};
+
+  const QUARTERLY = {"labels":["24Q3","24Q4","25Q1","25Q2","25Q3","25Q4","26Q1","26Q2"],"companies":{"005930":{"revenue":[65.0,68.0,70.0,72.0,72.0,73.0,76.0,79.9],"opProfit":[2.1,2.8,3.5,4.6,6.5,7.8,9.5,11.4]},"000660":{"revenue":[8.2,9.6,10.8,11.9,13.5,15.8,17.9,19.0],"opProfit":[-0.5,0.8,1.9,3.0,3.8,5.2,6.9,7.6]},"035720":{"revenue":[1.85,1.87,1.89,1.94,1.95,1.98,1.97,2.0],"opProfit":[0.14,0.13,0.13,0.12,0.13,0.12,0.11,0.12]},"AAPL":{"revenue":[80,118,83,87.5,85,125,88,93],"opProfit":[24,39,25,25.6,26,42,27,29]},"MSFT":{"revenue":[54,58,59,61,62,68,68,72],"opProfit":[23,25,26,28.4,27,31,31,33]},"NVDA":{"revenue":[11,13,17,19.6,24,29,35,42],"opProfit":[5,7,9,11.4,14,18,22,27]}}};
+
+  function fmtQuarterValue(v, market) {
+    const sign = v < 0 ? '-' : '';
+    const abs = Math.abs(v);
+    return market === 'KR' ? `${sign}${abs.toFixed(1)}조원` : `${sign}$${abs.toFixed(1)}B`;
+  }
+
+  function buildQuarterBarSvg(values, labels, color) {
+    const W = 300, H = 128, padL = 4, padR = 4, padT = 20, padB = 20;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const n = values.length;
+    const gap = 5;
+    const barW = (plotW - gap * (n - 1)) / n;
+    const maxV = Math.max(...values, 0.0001);
+    const minV = Math.min(...values, 0);
+    const zeroY = padT + plotH - ((0 - minV) / (maxV - minV || 1)) * plotH;
+
+    let bars = '';
+    let ticks = '';
+    values.forEach((v, i) => {
+      const x = padL + i * (barW + gap);
+      const h = (Math.abs(v) / (maxV - minV || 1)) * plotH;
+      const y = v >= 0 ? zeroY - h : zeroY;
+      const isLast = i === n - 1;
+      bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(h, 1.5).toFixed(1)}" rx="3" fill="${color}" fill-opacity="${isLast ? 1 : 0.4}"/>`;
+      if (i % 2 === 0 || isLast) {
+        ticks += `<text x="${(x + barW / 2).toFixed(1)}" y="${H - 4}" font-size="9" text-anchor="middle" fill="#9AA3B2">${labels[i]}</text>`;
+      }
+    });
+
+    return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+      <line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${W - padR}" y2="${zeroY.toFixed(1)}" stroke="#DADFE5" stroke-width="1"/>
+      ${bars}
+      ${ticks}
+    </svg>`;
+  }
+
+  function renderQuarterly() {
+    const wrap = document.getElementById('fgQtrWrap');
+    const cols = document.getElementById('fgQtrCols');
+    const comps = getSelectedCompanies();
+    if (!comps.length) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+    cols.style.setProperty('--cols', comps.length);
+
+    cols.innerHTML = comps.map((c, idx) => {
+      const q = QUARTERLY.companies[c.id];
+      const labels = QUARTERLY.labels;
+      const revLast = q.revenue[q.revenue.length - 1], revPrev = q.revenue[q.revenue.length - 2];
+      const opLast = q.opProfit[q.opProfit.length - 1], opPrev = q.opProfit[q.opProfit.length - 2];
+      const revQoQ = ((revLast - revPrev) / Math.abs(revPrev)) * 100;
+      const opQoQ = ((opLast - opPrev) / Math.abs(opPrev)) * 100;
+      const revCls = revQoQ >= 0 ? 'up' : 'down';
+      const opCls = opQoQ >= 0 ? 'up' : 'down';
+      const color = COMPANY_COLORS[idx];
+
+      return `
+      <div class="fg-qtr-card">
+        <h3>${c.name} <span style="font-weight:400;color:var(--ink-soft);font-size:12px;">· ${labels[0]} ~ ${labels[labels.length - 1]}</span></h3>
+        <div class="fg-qtr-row">
+          <div class="fg-qtr-chart">
+            <div class="fg-qtr-chart-title">
+              <span>매출액 (${labels[labels.length - 1]} <b>${fmtQuarterValue(revLast, c.market)}</b>)</span>
+              <span class="fg-yoy ${revCls}">QoQ ${revQoQ >= 0 ? '+' : ''}${revQoQ.toFixed(1)}%</span>
+            </div>
+            ${buildQuarterBarSvg(q.revenue, labels, color)}
+          </div>
+          <div class="fg-qtr-chart">
+            <div class="fg-qtr-chart-title">
+              <span>영업이익 (${labels[labels.length - 1]} <b>${fmtQuarterValue(opLast, c.market)}</b>)</span>
+              <span class="fg-yoy ${opCls}">QoQ ${opQoQ >= 0 ? '+' : ''}${opQoQ.toFixed(1)}%</span>
+            </div>
+            ${buildQuarterBarSvg(q.opProfit, labels, color)}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function fmtPrice(v, market) {
+    return market === 'KR' ? `${Math.round(v).toLocaleString()}원` : `$${v.toFixed(2)}`;
+  }
+
+  function buildPriceChartSvg(comps) {
+    const W = 640, H = 220, padL = 8, padR = 8, padT = 16, padB = 8;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+
+    if (comps.length === 1) {
+      const c = comps[0];
+      const series = PRICE_HISTORY[c.id];
+      const min = Math.min(...series), max = Math.max(...series);
+      const range = (max - min) || 1;
+      const pts = series.map((v, i) => [
+        padL + (i / (series.length - 1)) * plotW,
+        padT + plotH - ((v - min) / range) * plotH,
+      ]);
+      const pathD = pts.map((p, i) => (i === 0 ? 'M' : 'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+      const floorY = (padT + plotH).toFixed(1);
+      const areaD = `${pathD} L ${pts[pts.length - 1][0].toFixed(1)},${floorY} L ${pts[0][0].toFixed(1)},${floorY} Z`;
+      const color = COMPANY_COLORS[0];
+      const last = pts[pts.length - 1];
+
+      return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+        <defs><linearGradient id="fgPriceGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${color}" stop-opacity="0.22"/>
+          <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+        </linearGradient></defs>
+        <path d="${areaD}" fill="url(#fgPriceGrad)" stroke="none"/>
+        <path d="${pathD}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+        <circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="4.5" fill="${color}"/>
+      </svg>`;
+    }
+
+    const seriesNorms = comps.map((c, idx) => {
+      const series = PRICE_HISTORY[c.id];
+      const base = series[0];
+      const norm = series.map((v) => (v / base - 1) * 100);
+      return { c, norm, color: COMPANY_COLORS[idx] };
+    });
+    const allVals = seriesNorms.flatMap((s) => s.norm);
+    const min = Math.min(0, ...allVals), max = Math.max(0, ...allVals);
+    const range = (max - min) || 1;
+    const n = seriesNorms[0].norm.length;
+    const xFor = (i) => padL + (i / (n - 1)) * plotW;
+    const yFor = (v) => padT + plotH - ((v - min) / range) * plotH;
+    const zeroY = yFor(0).toFixed(1);
+
+    const paths = seriesNorms
+      .map((s) => {
+        const d = s.norm.map((v, i) => (i === 0 ? 'M' : 'L') + xFor(i).toFixed(1) + ',' + yFor(v).toFixed(1)).join(' ');
+        return `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+      })
+      .join('');
+    const dots = seriesNorms
+      .map((s) => {
+        const lastV = s.norm[s.norm.length - 1];
+        return `<circle cx="${xFor(n - 1).toFixed(1)}" cy="${yFor(lastV).toFixed(1)}" r="4.5" fill="${s.color}"/>`;
+      })
+      .join('');
+
+    return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+      <line x1="${padL}" y1="${zeroY}" x2="${W - padR}" y2="${zeroY}" stroke="#DADFE5" stroke-width="1.5" stroke-dasharray="5,5"/>
+      ${paths}
+      ${dots}
+    </svg>`;
+  }
+
+  function renderPriceChart() {
+    const wrap = document.getElementById('fgPriceWrap');
+    const container = document.getElementById('fgPriceChart');
+    const statsEl = document.getElementById('fgPriceStats');
+    const legendEl = document.getElementById('fgPriceLegend');
+    const comps = getSelectedCompanies();
+    if (!comps.length) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+    container.innerHTML = buildPriceChartSvg(comps);
+
+    if (comps.length === 1) {
+      const c = comps[0];
+      const series = PRICE_HISTORY[c.id];
+      const ret = (series[series.length - 1] / series[0] - 1) * 100;
+      const retCls = ret >= 0 ? 'up' : 'down';
+      statsEl.innerHTML = `
+        <div>현재가<b>${fmtPrice(series[series.length - 1], c.market)}</b></div>
+        <div>3개월 최고<b>${fmtPrice(Math.max(...series), c.market)}</b></div>
+        <div>3개월 최저<b>${fmtPrice(Math.min(...series), c.market)}</b></div>
+        <div>3개월 수익률<b><span class="fg-yoy ${retCls}" style="margin-left:0;">${ret >= 0 ? '+' : ''}${ret.toFixed(1)}%</span></b></div>`;
+      legendEl.innerHTML = '';
+    } else {
+      statsEl.innerHTML = '';
+      legendEl.innerHTML = comps
+        .map((c, i) => {
+          const series = PRICE_HISTORY[c.id];
+          const ret = (series[series.length - 1] / series[0] - 1) * 100;
+          const cls = ret >= 0 ? 'up' : 'down';
+          return `<span><i style="background:${COMPANY_COLORS[i]}"></i>${c.name} <span class="fg-yoy ${cls}" style="margin-left:4px;">${ret >= 0 ? '+' : ''}${ret.toFixed(1)}%</span></span>`;
+        })
+        .join('');
+    }
+  }
+
   function renderAnalyst(){
     const wrap = document.getElementById('fgAnWrap');
     const cols = document.getElementById('fgAnCols');
@@ -782,7 +1032,9 @@ table.fg-table th .fg-qbadge { margin-top: 6px; }
     renderGrid(document.getElementById('fgSearch').value);
     renderChips();
     renderCompare();
+    renderQuarterly();
     renderCharts();
+    renderPriceChart();
     renderAnalyst();
     renderSegments();
     renderCashflow();
@@ -793,6 +1045,7 @@ table.fg-table th .fg-qbadge { margin-top: 6px; }
   document.getElementById('fgSearch').addEventListener('input', (e) => renderGrid(e.target.value));
   renderTape();
   renderRadar();
+  loadLiveRadarData();
   renderCalendar();
   renderAll();
 })();
